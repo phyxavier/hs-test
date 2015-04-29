@@ -126,6 +126,8 @@ class ServiceArea < ActiveRecord::Base
   # a priority will be placed on a company/service area that match the product provided in :subscribed_to
   # note, matches are not restricted to the product, but a priority is placed on them
   def self.find_using_email(email, options={:subscribed_to => nil})
+    service_area_arr = find_service_area(email, options)
+    find_find_companies(email, options)
 
     company = potential_companies.first
     return company, company.public_service_areas.first
@@ -134,25 +136,25 @@ class ServiceArea < ActiveRecord::Base
   #ServiceArea.find_using_email(message.from, :subscribed_to => Listing.platinum)
 
   # 1 - first search service areas - highest priority
-  def find_service_area
+  def find_service_area(email, options)
     potential_service_areas = ServiceArea.where(["users.email = ? and service_areas.state = 'enabled' AND companies.state in ('approved', 'claimed')", email]).includes(:primary_contact, :company).all
-    if potential_service_areas.present? && options[:subscribed_to]
-      potential_service_areas.each do |service_area|
-        company = service_area.company
-        if company.listing_subscriptions.current.for_product(options[:subscribed_to]).latest.first
-          return company, service_area
-        end
-      end
-    elsif potential_service_areas.present?
-      service_area = potential_service_areas.first
-      return service_area.company, service_area
-    end
-  end
-  
 
-  def find_find_companies
-    # 2 - now search companies
+    if potential_service_areas.present?
+      if options[:subscribed_to].present?
+        service_area = potential_service_areas.detect{|sa| sa.company.listing_subscriptions.current.for_product(options[:subscribed_to]).latest.first.present? }
+
+        service_area.present? ? [service_area.company, service_area] : nil
+      else
+        [potential_service_areas.first.company, service_area]
+      end
+    end
+
+  end
+
+  # 2 - now search companies
+  def find_find_companies(email, options)
     potential_companies = Company.approved_and_claimed.where(["users.email = ?", email]).includes(:user).all
+
     return nil unless potential_companies.present?
 
     if options[:subscribed_to]
@@ -162,6 +164,7 @@ class ServiceArea < ActiveRecord::Base
         end
       end
     end
+
   end
 
    #eagerly load company associations for search results
