@@ -127,7 +127,14 @@ class ServiceArea < ActiveRecord::Base
   # note, matches are not restricted to the product, but a priority is placed on them
   def self.find_using_email(email, options={:subscribed_to => nil})
 
-    # 1 - first search service areas - highest priority
+    company = potential_companies.first
+    return company, company.public_service_areas.first
+  end
+
+  #ServiceArea.find_using_email(message.from, :subscribed_to => Listing.platinum)
+
+  # 1 - first search service areas - highest priority
+  def find_service_area
     potential_service_areas = ServiceArea.where(["users.email = ? and service_areas.state = 'enabled' AND companies.state in ('approved', 'claimed')", email]).includes(:primary_contact, :company).all
     if potential_service_areas.present? && options[:subscribed_to]
       potential_service_areas.each do |service_area|
@@ -140,7 +147,10 @@ class ServiceArea < ActiveRecord::Base
       service_area = potential_service_areas.first
       return service_area.company, service_area
     end
+  end
+  
 
+  def find_find_companies
     # 2 - now search companies
     potential_companies = Company.approved_and_claimed.where(["users.email = ?", email]).includes(:user).all
     return nil unless potential_companies.present?
@@ -152,16 +162,13 @@ class ServiceArea < ActiveRecord::Base
         end
       end
     end
-
-    company = potential_companies.first
-    return company, company.public_service_areas.first
   end
 
    #eagerly load company associations for search results
   def self.find_search_results(query, options={})
    solr_search_results = options.delete(:solr_search_results)
    begin
-     service_areas = query.joins(:company).all  
+     service_areas = query.joins(:company).all
      if solr_search_results
        service_areas_enhanced = []
        # add solr_score and geo_distance
@@ -244,7 +251,7 @@ class ServiceArea < ActiveRecord::Base
       else 1
       END as "weight"
       QUERY
-      
+
       # we may not have closest_city_id or closest_launched_city_id
       # if neither we cannot find a sponsor - so bail
       # minimum is closest_city_id and province_id
