@@ -126,14 +126,9 @@ class ServiceArea < ActiveRecord::Base
   # a priority will be placed on a company/service area that match the product provided in :subscribed_to
   # note, matches are not restricted to the product, but a priority is placed on them
   def self.find_using_email(email, options={:subscribed_to => nil})
-    service_area_arr = find_service_area(email, options)
-    find_service_companies(email, options)
-
-    company = potential_companies.first
-    return company, company.public_service_areas.first
+    find_service_area(email, options) or find_service_companies(email, options)
   end
 
-  #ServiceArea.find_using_email(message.from, :subscribed_to => Listing.platinum)
 
   # 1 - first search service areas - highest priority
   def find_service_area(email, options)
@@ -155,13 +150,15 @@ class ServiceArea < ActiveRecord::Base
   def find_service_companies(email, options)
     potential_companies = Company.approved_and_claimed.where(["users.email = ?", email]).includes(:user).all
 
-    if potential_companies.present? && options[:subscribed_to]
+    if potential_companies.present?
+      if options[:subscribed_to]
+        company = potential_companies.detect{|company| company.listing_subscriptions.current.for_product(options[:subscribed_to]).latest.first.present? }
 
-      company = potential_companies.detect{|company| company.listing_subscriptions.current.for_product(options[:subscribed_to]).latest.first.present? }
-
-      company.present? ? [company, company.public_service_areas.first] : nil
-    else
-      nil
+        company.present? ? [company, company.public_service_areas.first] : nil
+      else
+        company = potential_companies.first
+        [company, company.public_service_areas.first]
+      end
     end
 
   end
